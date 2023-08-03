@@ -6,10 +6,10 @@ import logging
 
 import utils as util
  
-PATTERNCREATEWRAPPER = r'CREATE OR REPLACE WRAPPER\s+(\"[^\"]*[^\"]*\"|\S*\S*)\s+(\"[^\"]*[^\"]*\"|\S*\S*)\s+[\s\S][\s\S]*?;+'
-PATTERNCREATETABLE = r'CREATE OR REPLACE TABLE\s+(\"[^\"]*[^\"]*\"|\S*\S*)\s+(\"[^\"]*[^\"]*\"|\S*\S*)\s+[\s\S][\s\S]*?;+'
-PATTERNADDSEARCH = r'ADD SEARCHMETHOD\s+(\"[^\"]*[^\"]*\"|\S*\S*)*?\(+'
-PATTERNWRAPPER = r'WRAPPER\s+\((\"[^\"]*[^\"]*\"|\S*\S*)\s+(\"[^\"]*[^\"]*\"|\S*\S*)*?\)+'
+PATTERN_CREATE_WRAPPER = r'CREATE OR REPLACE WRAPPER\s+(\"[^\"]*[^\"]*\"|\S*\S*)\s+(\"[^\"]*[^\"]*\"|\S*\S*)\s+[\s\S][\s\S]*?;+'
+PATTERN_CREATE_TABLE = r'CREATE OR REPLACE TABLE\s+(\"[^\"]*[^\"]*\"|\S*\S*)\s+(\"[^\"]*[^\"]*\"|\S*\S*)\s+[\s\S][\s\S]*?;+'
+PATTERN_ADD_SEARCH = r'ADD SEARCHMETHOD\s+(\"[^\"]*[^\"]*\"|\S*\S*)*?\(+'
+PATTERN_WRAPPER = r'WRAPPER\s+\((\"[^\"]*[^\"]*\"|\S*\S*)\s+(\"[^\"]*[^\"]*\"|\S*\S*)*?\)+'
  
 parser = argparse.ArgumentParser(description='''Replace variable names in renamed elements''')
 parser.add_argument('-d', '--domain', help='The domain name.')
@@ -24,51 +24,47 @@ slashes = len(repo_root.split('\\\\'))-1
 def update_wrapper_in_vql(data: str, file_name: str, original_changed: bool) -> Tuple[str, bool] :
     changed = False
     var_name_to_compare = get_element_name(file_name)
- 
-    pattern_create_wrapper = re.compile(PATTERNCREATEWRAPPER)
-    wrapper_name = ""
-    matches = pattern_create_wrapper.findall(data)
-    if len(matches) > 0 and type(matches[0]) is tuple:
-        wrapper_name = matches[0][1]
-   
-    pattern_create_table = re.compile(PATTERNCREATETABLE)
-    baseview_name = ""
-    matches = pattern_create_table.findall(data)
-    if len(matches) > 0 and type(matches[0]) is tuple:
-        baseview_name = matches[0][0]
- 
-    pattern_add_search = re.compile(PATTERNADDSEARCH)
-    add_search = ""
-    matches = pattern_add_search.findall(data)
-    if len(matches) > 0 and type(matches[0]) is tuple:
-        add_search = matches[0][0]
- 
-    pattern_wrapper = re.compile(PATTERNWRAPPER)
-    wrapper_name_ref = ""
-    matches = pattern_wrapper.findall(data)
-    if len(matches) > 0 and type(matches[0]) is tuple:
-        wrapper_name_ref = matches[0][1]
- 
-    if len(baseview_name) > 0 and not var_name_to_compare == baseview_name:
+
+    pattern_create_wrapper = re.compile(PATTERN_CREATE_WRAPPER)
+    wrapper_name = re.search(pattern_create_wrapper, data)
+    if wrapper_name:
+        wrapper_name = wrapper_name.group(2)
+
+    pattern_create_table = re.compile(PATTERN_CREATE_TABLE)
+    baseview_name = re.search(pattern_create_table, data)
+    if baseview_name:
+        baseview_name = baseview_name.group(1)
+
+    pattern_add_search = re.compile(PATTERN_ADD_SEARCH)
+    add_search = re.search(pattern_add_search, data)
+    if add_search:
+        add_search = add_search.group(1)
+
+    pattern_wrapper = re.compile(PATTERN_WRAPPER)
+    wrapper_name_ref = re.search(pattern_wrapper, data)
+    if wrapper_name_ref:
+        wrapper_name_ref = wrapper_name_ref.group(2)
+
+    if baseview_name and baseview_name != var_name_to_compare:
         changed = True
         data = data.replace(baseview_name, var_name_to_compare)
         logging.debug(f"\nFilename: \"{file_name}\"\n\t-Base View: {baseview_name} to: \"{var_name_to_compare}\"")
- 
-    if len(wrapper_name) > 0 and not var_name_to_compare == wrapper_name:
+
+    if wrapper_name and wrapper_name != var_name_to_compare:
         changed = True
         data = data.replace(wrapper_name, var_name_to_compare)
         logging.debug(f"\nFilename: \"{file_name}\"\n\t-Wrapper: {wrapper_name} to: \"{var_name_to_compare}\"")
- 
-    if len(add_search) > 0 and not var_name_to_compare == add_search:
+
+    if add_search and add_search != var_name_to_compare:
         changed = True
         data = data.replace(add_search, var_name_to_compare)
         logging.debug(f"\nFilename: \"{file_name}\"\n\t-Add Search: {add_search} to: \"{var_name_to_compare}\"")
- 
-    if len(wrapper_name_ref) > 0 and not var_name_to_compare == wrapper_name_ref:
+
+    if wrapper_name_ref and wrapper_name_ref != var_name_to_compare:
         changed = True
         data = data.replace(wrapper_name_ref, var_name_to_compare)
         logging.debug(f"\nFilename: \"{file_name}\"\n\t-Ref Wrapper: {wrapper_name_ref} to: \"{var_name_to_compare}\"")
- 
+
     return data, original_changed or changed
  
 def get_element_name(vql_file: str) -> str:
@@ -169,4 +165,3 @@ for vql_file in vql_file_list:
     if changed:
         with open(vql_file, 'w') as f:
             f.write(data)
- 
